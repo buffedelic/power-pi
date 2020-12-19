@@ -1,57 +1,44 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 
-#from gpiozero import LightSensor, Buzzer
+from __future__ import division
 from signal import pause
+#import time
 import time
 import sys
-#import Adafruit_DHT
 import schedule
 import argparse
-#import sqlite3
 from influxdb import InfluxDBClient
+import ow #keeping us from python3 :(
 
 DATABASE = 'power'
 
-#l_temp_sensor_type = Adafruit_DHT.DHT22
-#l_gpio_ldr_1 = 4
-#l_gpio_ldr_2 = 23
-#l_gpio_temp = 22
-l_cnt_1 = 0 #Total
-l_cnt_2 = 0 #Heater
-l_cnt_3 = 0 #FTX
-l_out_file = "/share/power-pi/power-pi.txt"
-l_poll_minutes = 15
-l_hr_rate_multiply = (60 / l_poll_minutes)
+
+l_cnt_1 = 0 #Total 1D00FD0C0000009B counter A
+l_cnt_2 = 0 #Heater 1D00FD0C0000009B
+l_cnt_3 = 0 #FTX 1D00FD0C0000009B
+l_out_file = "/home/pi/power-pi/power-pi.txt"
+l_poll_minutes = 1
 l_verbosemode = True
+l_first_run = True
 
+milliseconds = lambda: int(time.time() * 1000)
+l_millis = milliseconds()
 
-def insert_row(measurement):
-    client = InfluxDBClient(host='localhost', port=8086)
+def insert_row(json_body):
+    client = InfluxDBClient(host='localhost', port=8086, username='mqtt', password='mqtt')
     client.switch_database(DATABASE)
-    json_body = ""
     try:
+        print("Writing to db")
         client.write_points(json_body)
     except:
         pass
     client.close()
-    # sql = '''INSERT INTO measure_history (temperature, humidity, sensor_count_1, sensor_count_2, sensor_1_rate_mwh, sensor_2_rate_mwh) VALUES (?,?,?,?,?,?)'''
-    # conn = sqlite3.connect(DATABASE)
-    # with conn:
-    #     cur = conn.cursor()
-    #     cur.execute(sql, measurement)
-    # conn.close()
 
 def do_purge():
-    client = InfluxDBClient(host='localhost', port=8086)
-    client.switch_database(DATABASE)
+    #client = InfluxDBClient(host='localhost', port=8086)
+    #client.switch_database(DATABASE)
     
     # open(l_out_file, 'w')
-    # sql = '''delete from measure_history '''
-    # conn = sqlite3.connect(DATABASE)
-    # with conn:
-    #     cur = conn.cursor()
-    #     cur.execute(sql)
-    # conn.close()
     exit(0)
 
 def logmsg(msg):
@@ -59,34 +46,87 @@ def logmsg(msg):
     print(msg_text)
     with open(l_out_file,'a') as f:
         f.write("{}\n".format(msg_text))
-
-# def light_pulse_seen_1():
-#     global l_cnt_1
-#     global l_verbosemode
-#     l_cnt_1 = l_cnt_1 + 1
-#     if l_verbosemode:
-#         logmsg("      light_pulse_seen_1 {}".format(l_cnt_1))
-
-# def light_pulse_seen_2():
-#     global l_cnt_2
-#     global l_verbosemode
-#     l_cnt_2 = l_cnt_2 + 1
-#     if l_verbosemode:
-#         logmsg("      light_pulse_seen_2 {}".format(l_cnt_2))
         
 def handle_time_event():
-    global l_cnt_1
-    global l_cnt_2
-    l_humidity, l_temperature = Adafruit_DHT.read_retry(l_temp_sensor_type, l_gpio_temp)
-    logmsg("Pulses={},{} Temp={:0.1f}C  l_humidity={:0.1f}%".format(l_cnt_1, l_cnt_2, l_temperature, l_humidity))
-    measurement = (l_temperature, l_humidity, l_cnt_1, l_cnt_2, l_cnt_1*l_hr_rate_multiply , l_cnt_2*l_hr_rate_multiply )
-    insert_row(measurement)
-    l_cnt_1 = 0
-    l_cnt_2 = 0
+    global l_first_run
+
+    if not l_first_run:
+        
+        global l_cnt_1
+        global l_cnt_2
+        global l_cnt_3
+        global l_millis
+        l_cnt_1_last = l_cnt_1
+        l_cnt_2_last = l_cnt_2
+        l_cnt_3_last = l_cnt_3
+        l_millis_last = l_millis
+
+        ow.init('localhost:4304')
+        l_cnt_1 = int(ow.Sensor( '/1D6CEC0C00000094').counter_A)
+        l_cnt_2 = int(ow.Sensor( '/1D00FD0C0000009B').counter_A)
+        l_cnt_3 = int(ow.Sensor( '/1D00FD0C0000009B').counter_B)
+
+        
+        l_millis = milliseconds()
+        interval_millis = l_millis - l_millis_last
+
+        # P(w) = (3600 / T(s)) / ppwh
+        # watt = (3600000 / ((interval_millis / interval_count)) / 1) or 0.8
+        try:
+            watt_total = ( 3600000 / (interval_millis / (l_cnt_1 - l_cnt_1_last))) / 1
+        except ZeroDivisionError:
+            watt_total = 0 
+        try:
+            watt_heater = ( 3600000 / (interval_millis / (l_cnt_2 - l_cnt_2_last))) / 0.8
+        except ZeroDivisionError:
+            watt_heater = 0 
+        try:
+            watt_ftx = ( 3600000 / (interval_millis / (l_cnt_3 - l_cnt_3_last))) / 1
+        except ZeroDivisionError:
+            watt_ftx = 0 
+
+        ow.finish()
+        logmsg("Pulses total={}, Pulses heater={}  Pulses FTX={}".format((l_cnt_1 - l_cnt_1_last), (l_cnt_2 - l_cnt_2_last), (l_cnt_3 - l_cnt_3_last)))
+        json_body = [
+        {
+            "measurement": "power_total",
+            "tags": {
+                "dev_id": "1D6CEC0C00000094",
+                "instance": "counter.A"
+            },
+            "fields": {
+                "watt": round(watt_total,2)
+            }
+        },
+        {
+            "measurement": "power_heater",
+            "tags": {
+                "dev_id": "1D00FD0C0000009B",
+                "instance": "counter.A"
+            },
+            "fields": {
+                "watt": round(watt_heater,2)
+            }
+        },
+        {
+            "measurement": "power_ftx",
+            "tags": {
+                "dev_id": "1D00FD0C0000009B",
+                "instance": "counter.A"
+            },
+            "fields": {
+                "watt": round(watt_ftx,2)
+            }
+        }
+        ]
+        #print(json_body)
+        insert_row(json_body)
+    else:
+        l_first_run = False
 
 def main():
     global l_verbosemode
-    parser = argparse.ArgumentParser(description='Power and temp monitor.')
+    parser = argparse.ArgumentParser(description='Power monitor.')
     parser.add_argument("-v", "--verbose", help="increase output verbosity", action="store_true")
     parser.add_argument("-p", "--purge", help="purge file and database", action="store_true")
     args = parser.parse_args()
@@ -96,13 +136,8 @@ def main():
 
     l_verbosemode = args.verbose
 
-    # ldr_1 = LightSensor(l_gpio_ldr_1)  
-    # ldr_2 = LightSensor(l_gpio_ldr_2)  
-    # ldr_1.when_light = light_pulse_seen_1
-    # ldr_2.when_light = light_pulse_seen_2
     handle_time_event()
     schedule.every(l_poll_minutes).minutes.do(handle_time_event)
-
     while True:
         schedule.run_pending()
         time.sleep(1)
