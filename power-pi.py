@@ -1,42 +1,57 @@
-from gpiozero import LightSensor, Buzzer
+#!/usr/bin/env python3
+
+#from gpiozero import LightSensor, Buzzer
 from signal import pause
 import time
 import sys
-import Adafruit_DHT
+#import Adafruit_DHT
 import schedule
 import argparse
-import sqlite3
+#import sqlite3
+from influxdb import InfluxDBClient
 
-DATABASE = '/share/power-pi/database/power-sqlite.db'
+DATABASE = 'power'
 
-l_temp_sensor_type = Adafruit_DHT.DHT22
-l_gpio_ldr_1 = 4
-l_gpio_ldr_2 = 23
-l_gpio_temp = 22
-l_cnt_1 = 0
-l_cnt_2 = 0
+#l_temp_sensor_type = Adafruit_DHT.DHT22
+#l_gpio_ldr_1 = 4
+#l_gpio_ldr_2 = 23
+#l_gpio_temp = 22
+l_cnt_1 = 0 #Total
+l_cnt_2 = 0 #Heater
+l_cnt_3 = 0 #FTX
 l_out_file = "/share/power-pi/power-pi.txt"
 l_poll_minutes = 15
 l_hr_rate_multiply = (60 / l_poll_minutes)
-l_verbosemode = False
+l_verbosemode = True
 
 
 def insert_row(measurement):
-    sql = '''INSERT INTO measure_history (temperature, humidity, sensor_count_1, sensor_count_2, sensor_1_rate_mwh, sensor_2_rate_mwh) VALUES (?,?,?,?,?,?)'''
-    conn = sqlite3.connect(DATABASE)
-    with conn:
-        cur = conn.cursor()
-        cur.execute(sql, measurement)
-    conn.close()
+    client = InfluxDBClient(host='localhost', port=8086)
+    client.switch_database(DATABASE)
+    json_body = ""
+    try:
+        client.write_points(json_body)
+    except:
+        pass
+    client.close()
+    # sql = '''INSERT INTO measure_history (temperature, humidity, sensor_count_1, sensor_count_2, sensor_1_rate_mwh, sensor_2_rate_mwh) VALUES (?,?,?,?,?,?)'''
+    # conn = sqlite3.connect(DATABASE)
+    # with conn:
+    #     cur = conn.cursor()
+    #     cur.execute(sql, measurement)
+    # conn.close()
 
 def do_purge():
-    open(l_out_file, 'w')
-    sql = '''delete from measure_history '''
-    conn = sqlite3.connect(DATABASE)
-    with conn:
-        cur = conn.cursor()
-        cur.execute(sql)
-    conn.close()
+    client = InfluxDBClient(host='localhost', port=8086)
+    client.switch_database(DATABASE)
+    
+    # open(l_out_file, 'w')
+    # sql = '''delete from measure_history '''
+    # conn = sqlite3.connect(DATABASE)
+    # with conn:
+    #     cur = conn.cursor()
+    #     cur.execute(sql)
+    # conn.close()
     exit(0)
 
 def logmsg(msg):
@@ -45,19 +60,19 @@ def logmsg(msg):
     with open(l_out_file,'a') as f:
         f.write("{}\n".format(msg_text))
 
-def light_pulse_seen_1():
-    global l_cnt_1
-    global l_verbosemode
-    l_cnt_1 = l_cnt_1 + 1
-    if l_verbosemode:
-        logmsg("      light_pulse_seen_1 {}".format(l_cnt_1))
+# def light_pulse_seen_1():
+#     global l_cnt_1
+#     global l_verbosemode
+#     l_cnt_1 = l_cnt_1 + 1
+#     if l_verbosemode:
+#         logmsg("      light_pulse_seen_1 {}".format(l_cnt_1))
 
-def light_pulse_seen_2():
-    global l_cnt_2
-    global l_verbosemode
-    l_cnt_2 = l_cnt_2 + 1
-    if l_verbosemode:
-        logmsg("      light_pulse_seen_2 {}".format(l_cnt_2))
+# def light_pulse_seen_2():
+#     global l_cnt_2
+#     global l_verbosemode
+#     l_cnt_2 = l_cnt_2 + 1
+#     if l_verbosemode:
+#         logmsg("      light_pulse_seen_2 {}".format(l_cnt_2))
         
 def handle_time_event():
     global l_cnt_1
@@ -81,10 +96,10 @@ def main():
 
     l_verbosemode = args.verbose
 
-    ldr_1 = LightSensor(l_gpio_ldr_1)  
-    ldr_2 = LightSensor(l_gpio_ldr_2)  
-    ldr_1.when_light = light_pulse_seen_1
-    ldr_2.when_light = light_pulse_seen_2
+    # ldr_1 = LightSensor(l_gpio_ldr_1)  
+    # ldr_2 = LightSensor(l_gpio_ldr_2)  
+    # ldr_1.when_light = light_pulse_seen_1
+    # ldr_2.when_light = light_pulse_seen_2
     handle_time_event()
     schedule.every(l_poll_minutes).minutes.do(handle_time_event)
 
