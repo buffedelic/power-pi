@@ -5,8 +5,11 @@ After=multi-user.target
 [Service]
 User=pi
 Group=pi
-WorkingDirectory=/home/pi/git/power-pi
-ExecStart=/usr/bin/python /home/pi/git/power-pi/power-pi.py
+WorkingDirectory=/home/pi/power-pi
+ExecStart=/usr/bin/python /home/pi/power-pi/power-pi.py
+StandardOutput=inherit
+StandardError=inherit
+Restart=always
 
 [Install]
 WantedBy=multi-user.target
