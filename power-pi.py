@@ -123,6 +123,11 @@ def handle_time_event():
         insert_row(json_body)
     else:
         l_first_run = False
+        ow.init('localhost:4304')
+        l_cnt_1 = int(ow.Sensor( '/1D6CEC0C00000094').counter_A)
+        l_cnt_2 = int(ow.Sensor( '/1D00FD0C0000009B').counter_A)
+        l_cnt_3 = int(ow.Sensor( '/1D00FD0C0000009B').counter_B)
+        ow.finish()
 
 def main():
     global l_verbosemode
