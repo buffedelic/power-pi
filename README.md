@@ -1,4 +1,5 @@
 # Power Pi
+**!!THIS IS A HEAVILY EDITED VERSION WITH INFLUXDB AND 1WIRE COUNTERS!!**
 **Home power consumption monitoring using a Raspberry Pi**
 
 ## Hardware Sensors
