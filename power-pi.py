@@ -154,13 +154,17 @@ def handle_time_event():
         message = []
         #[{'topic': '<topic>', 'payload': '<payload>'}, {'topic': '<topic>', 'payload': '<payloads>'}]
         message.append({'topic':"power/meter/total/current",
-                        'payload': "{}".format(str(round(watt_total,2)))})
+                        'payload': "{}".format(str(round(watt_total,2))),
+                        'qos':2})
         message.append({'topic':"power/meter/heater/current", 
-                        'payload': "{}".format(str(round(watt_heater,2)))})
+                        'payload': "{}".format(str(round(watt_heater,2))),
+                        'qos':2})
         message.append({'topic':"power/meter/ftx/current", 
-                        'payload': "{}".format(str(round(watt_ftx,2)))})
+                        'payload': "{}".format(str(round(watt_ftx,2))),
+                        'qos':2})
         message.append({'topic':"power/meter/house_hold/current", 
-                        'payload': "{}".format(str(round(watt_household,2)))})
+                        'payload': "{}".format(str(round(watt_household,2))),
+                        'qos':2})
         
         publish_message(message)
 
