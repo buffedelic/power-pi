@@ -9,6 +9,7 @@ import schedule
 import argparse
 from influxdb import InfluxDBClient
 import ow #keeping us from python3 :(
+import paho.mqtt.publish as mqtt
 
 DATABASE = 'power'
 
@@ -18,11 +19,19 @@ l_cnt_2 = 0 #Heater 1D00FD0C0000009B
 l_cnt_3 = 0 #FTX 1D00FD0C0000009B
 l_out_file = "/home/pi/power-pi/power-pi.txt"
 l_poll_minutes = 1
-l_verbosemode = True
 l_first_run = True
+l_verbosemode = False
+if l_verbosemode:
+    f = open(l_out_file, 'w')
+    c.close()
 
 milliseconds = lambda: int(time.time() * 1000)
 l_millis = milliseconds()
+
+mqtt_server = 'homeassistant.lan'
+mqtt_user = 'buff'
+mqtt_password = 'mammas'
+
 
 def insert_row(json_body):
     client = InfluxDBClient(host='localhost', port=8086, username='mqtt', password='mqtt')
@@ -38,7 +47,8 @@ def do_purge():
     #client = InfluxDBClient(host='localhost', port=8086)
     #client.switch_database(DATABASE)
     
-    # open(l_out_file, 'w')
+    f = open(l_out_file, 'w')
+    f.close()
     exit(0)
 
 def logmsg(msg):
@@ -46,7 +56,15 @@ def logmsg(msg):
     print(msg_text)
     with open(l_out_file,'a') as f:
         f.write("{}\n".format(msg_text))
-        
+
+def publish_message(message, topic=""):
+
+
+		print("Publishing to MQTT message: ")
+		print(str(message))
+		mqtt.multiple(message, hostname=mqtt_server, auth={'username':mqtt_user, 'password':mqtt_password}, client_id="Power")
+
+
 def handle_time_event():
     global l_first_run
 
@@ -84,6 +102,8 @@ def handle_time_event():
             watt_ftx = ( 3600000 / (interval_millis / (l_cnt_3 - l_cnt_3_last))) / 1
         except ZeroDivisionError:
             watt_ftx = 0 
+        
+        watt_household = watt_total - (watt_ftx + watt_heater)
 
         ow.finish()
         logmsg("Pulses total={}, Pulses heater={}  Pulses FTX={}".format((l_cnt_1 - l_cnt_1_last), (l_cnt_2 - l_cnt_2_last), (l_cnt_3 - l_cnt_3_last)))
@@ -117,10 +137,33 @@ def handle_time_event():
             "fields": {
                 "watt": round(watt_ftx,2)
             }
+        },
+        {
+            "measurement": "power_household",
+            "tags": {
+                "dev_id": "calculated",
+                "instance": "1"
+            },
+            "fields": {
+                "watt": round(watt_household,2)
+            }
         }
         ]
-        #print(json_body)
         insert_row(json_body)
+
+        message = []
+        #[{'topic': '<topic>', 'payload': '<payload>'}, {'topic': '<topic>', 'payload': '<payloads>'}]
+        message.append({'topic':"power/meter/total/current",
+                        'payload': "{}".format(str(round(watt_total,2)))})
+        message.append({'topic':"power/meter/heater/current", 
+                        'payload': "{}".format(str(round(watt_heater,2)))})
+        message.append({'topic':"power/meter/ftx/current", 
+                        'payload': "{}".format(str(round(watt_ftx,2)))})
+        message.append({'topic':"power/meter/house_hold/current", 
+                        'payload': "{}".format(str(round(watt_household,2)))})
+        
+        publish_message(message)
+
     else:
         l_first_run = False
         ow.init('localhost:4304')

@@ -1,3 +1,4 @@
 influxdb==5.3.1
 ow===3.2p3
+paho-mqtt==1.5.1
 schedule==0.6.0
