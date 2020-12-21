@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 
 from __future__ import division
 from signal import pause
@@ -21,9 +21,10 @@ l_out_file = "/home/pi/power-pi/power-pi.txt"
 l_poll_minutes = 1
 l_first_run = True
 l_verbosemode = False
+l_mqtt = False
 if l_verbosemode:
     f = open(l_out_file, 'w')
-    c.close()
+    f.close()
 
 milliseconds = lambda: int(time.time() * 1000)
 l_millis = milliseconds()
@@ -106,7 +107,7 @@ def handle_time_event():
         watt_household = watt_total - (watt_ftx + watt_heater)
 
         ow.finish()
-        logmsg("Pulses total={}, Pulses heater={}  Pulses FTX={}".format((l_cnt_1 - l_cnt_1_last), (l_cnt_2 - l_cnt_2_last), (l_cnt_3 - l_cnt_3_last)))
+        logmsg("Pulses total={}, Pulses heater={}  Pulses FTX={},  Millis={}".format((l_cnt_1 - l_cnt_1_last), (l_cnt_2 - l_cnt_2_last), (l_cnt_3 - l_cnt_3_last), interval_millis))
         json_body = [
         {
             "measurement": "power_total",
@@ -150,23 +151,23 @@ def handle_time_event():
         }
         ]
         insert_row(json_body)
-
-        message = []
-        #[{'topic': '<topic>', 'payload': '<payload>'}, {'topic': '<topic>', 'payload': '<payloads>'}]
-        message.append({'topic':"power/meter/total/current",
-                        'payload': "{}".format(str(round(watt_total,2))),
-                        'qos':2})
-        message.append({'topic':"power/meter/heater/current", 
-                        'payload': "{}".format(str(round(watt_heater,2))),
-                        'qos':2})
-        message.append({'topic':"power/meter/ftx/current", 
-                        'payload': "{}".format(str(round(watt_ftx,2))),
-                        'qos':2})
-        message.append({'topic':"power/meter/house_hold/current", 
-                        'payload': "{}".format(str(round(watt_household,2))),
-                        'qos':2})
-        
-        publish_message(message)
+        if l_mqtt:
+            
+            message = []
+            message.append({'topic':"power/meter/total/current",
+                            'payload': "{}".format(str(round(watt_total,2))),
+                            'qos':2})
+            message.append({'topic':"power/meter/heater/current", 
+                            'payload': "{}".format(str(round(watt_heater,2))),
+                            'qos':2})
+            message.append({'topic':"power/meter/ftx/current", 
+                            'payload': "{}".format(str(round(watt_ftx,2))),
+                            'qos':2})
+            message.append({'topic':"power/meter/house_hold/current", 
+                            'payload': "{}".format(str(round(watt_household,2))),
+                            'qos':2})
+            
+            publish_message(message)
 
     else:
         l_first_run = False
@@ -180,7 +181,7 @@ def main():
     global l_verbosemode
     parser = argparse.ArgumentParser(description='Power monitor.')
     parser.add_argument("-v", "--verbose", help="increase output verbosity", action="store_true")
-    parser.add_argument("-p", "--purge", help="purge file and database", action="store_true")
+    parser.add_argument("-p", "--purge", help="purge logfile", action="store_true")
     args = parser.parse_args()
 
     if (args.purge):
