@@ -21,7 +21,7 @@ l_out_file = "/home/pi/power-pi/power-pi.txt"
 l_poll_minutes = 1
 l_first_run = True
 l_verbosemode = False
-l_mqtt = False
+l_mqtt = True
 if l_verbosemode:
     f = open(l_out_file, 'w')
     f.close()
